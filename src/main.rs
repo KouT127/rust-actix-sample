@@ -1,11 +1,12 @@
 pub mod actions;
 pub mod models;
 
-use crate::actions::{find_users, find_users2};
-use crate::models::UserResponse;
+use crate::actions::{create_user, find_users};
+use crate::models::{NewUser, UserResponse};
 use actix_web::middleware::Logger;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 
+use chrono::Utc;
 use sqlx::{MySqlConnection, MySqlPool, Pool};
 use std::env;
 use tera::Tera;
@@ -38,8 +39,8 @@ pub async fn new_pool() -> MySqlPool {
         .expect("Failed to mysql")
 }
 
-#[get("/")]
-async fn index(context: web::Data<Context>) -> impl Responder {
+#[get("/users")]
+async fn fetch_users_handler(context: web::Data<Context>) -> impl Responder {
     let pool = context.pool.clone();
     let users = find_users(&pool).await;
 
@@ -49,54 +50,29 @@ async fn index(context: web::Data<Context>) -> impl Responder {
     let responses = users
         .unwrap()
         .iter()
-        .map(|user| UserResponse::from(user))
+        .map(|user| UserResponse::from_user(&user))
         .collect::<Vec<UserResponse>>();
     Ok(HttpResponse::Ok().json(&responses))
 }
 
-#[get("/3")]
-async fn index3(context: web::Data<Context>) -> impl Responder {
-    let pool = context.pool.clone();
-    let users = find_users2(&pool).await;
-    if users.is_err() {
+#[post("/users")]
+async fn create_user_handler(context: web::Data<Context>) -> impl Responder {
+    let pool = &context.pool;
+    let mut user = NewUser {
+        id: None,
+        name: "test".to_string(),
+        created_at: Utc::now().naive_utc(),
+        updated_at: Utc::now().naive_utc(),
+    };
+
+    let result = create_user(pool, &mut user).await;
+    if result.is_err() {
         return Err(HttpResponse::BadRequest());
     }
-    let responses = users
-        .unwrap()
-        .iter()
-        .map(|user| UserResponse::from(user))
-        .collect::<Vec<UserResponse>>();
+
+    let responses = UserResponse::from_new_user(&user);
     Ok(HttpResponse::Ok().json(&responses))
 }
-
-#[get("/2")]
-async fn index2(context: web::Data<Context>) -> impl Responder {
-    let tmpl = &context.template;
-    let mut ctx = tera::Context::new();
-    ctx.insert("users", &vec!["test", "test"]);
-    let view = tmpl
-        .render("index.tera", &ctx)
-        .map_err(|_e| HttpResponse::BadRequest());
-
-    HttpResponse::Ok()
-        .content_type("text/html")
-        .body(view.unwrap())
-}
-
-// #[post("/")]
-// async fn create_user_handler(context: web::Data<Context>) -> impl Responder {
-//     let result = web::block(move || {
-//         let pool = &context.pool;
-//         create_user(pool, "test")
-//     })
-//     .await;
-//
-//     if result.is_err() {
-//         return Err(HttpResponse::BadRequest());
-//     }
-//     let responses = UserResponse::from(&result.unwrap());
-//     Ok(HttpResponse::Ok().json(&responses))
-// }
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
@@ -115,9 +91,8 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(Logger::default())
             .app_data(context.clone())
-            .service(index)
-            .service(index2)
-            .service(index3)
+            .service(fetch_users_handler)
+            .service(create_user_handler)
     })
     .workers(2)
     .bind(&bind)?
