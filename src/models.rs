@@ -17,7 +17,7 @@ pub struct NewUser {
     pub updated_at: NaiveDateTime,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 pub struct UserResponse {
     pub id: u64,
     pub name: String,
@@ -42,4 +42,9 @@ impl UserResponse {
             updated_at: user.updated_at,
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UserPayload {
+    pub name: String,
 }
