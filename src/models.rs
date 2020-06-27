@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct User {
-    pub id: i64,
+    pub id: u64,
     pub name: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -11,7 +11,7 @@ pub struct User {
 
 #[derive(Debug)]
 pub struct NewUser {
-    pub id: Option<i64>,
+    pub id: Option<u64>,
     pub name: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -19,7 +19,7 @@ pub struct NewUser {
 
 #[derive(Serialize, Deserialize)]
 pub struct UserResponse {
-    pub id: i64,
+    pub id: u64,
     pub name: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,

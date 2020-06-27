@@ -1,9 +1,9 @@
 -- Your SQL goes here
 CREATE TABLE IF NOT EXISTS `users`
 (
-    `id`         bigint  NOT NULL AUTO_INCREMENT COMMENT 'id',
-    `name`       varchar(255)      NOT NULL COMMENT 'ユーザー名',
-    `created_at` datetime          NOT NULL COMMENT '登録日時',
+    `id`         bigint unsigned NOT NULL AUTO_INCREMENT COMMENT 'id',
+    `name`       varchar(255)    NOT NULL COMMENT 'ユーザー名',
+    `created_at` datetime        NOT NULL COMMENT '登録日時',
     `updated_at` datetime DEFAULT NULL COMMENT '更新日時',
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
@@ -14,12 +14,12 @@ create index idx_users_id on users (id);
 
 CREATE TABLE IF NOT EXISTS `tasks`
 (
-    `id`         bigint  NOT NULL AUTO_INCREMENT COMMENT 'id',
-    `user_id`    bigint  NOT NULL COMMENT 'user_id',
-    `title`      varchar(255)      NOT NULL COMMENT 'タイトル',
-    `is_done`    bool          NOT NULL DEFAULT false COMMENT '完了フラグ',
-    `created_at` datetime          NOT NULL COMMENT '登録日時',
-    `updated_at` datetime                   DEFAULT NULL COMMENT '更新日時',
+    `id`         bigint unsigned NOT NULL AUTO_INCREMENT COMMENT 'id',
+    `user_id`    bigint unsigned NOT NULL COMMENT 'user_id',
+    `title`      varchar(255)    NOT NULL COMMENT 'タイトル',
+    `is_done`    bool            NOT NULL DEFAULT false COMMENT '完了フラグ',
+    `created_at` datetime        NOT NULL COMMENT '登録日時',
+    `updated_at` datetime                 DEFAULT NULL COMMENT '更新日時',
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8 COMMENT ='タスクテーブル';

@@ -1,6 +1,7 @@
 use crate::models::{NewUser, User};
 use sqlx::mysql::MySqlRow;
 use sqlx::{MySqlPool, Row};
+use std::ops::Deref;
 
 pub async fn find_users(conn: &MySqlPool) -> anyhow::Result<Vec<User>> {
     // ex: Use macro
@@ -24,7 +25,7 @@ pub async fn find_users(conn: &MySqlPool) -> anyhow::Result<Vec<User>> {
     }
 }
 
-pub async fn create_user(conn: &MySqlPool, user: &mut NewUser) -> anyhow::Result<i64> {
+pub async fn create_user(conn: &MySqlPool, user: &mut NewUser) -> anyhow::Result<u64> {
     let mut tx = conn.begin().await?;
     let affected = sqlx::query("INSERT INTO users (name, created_at, updated_at) value (?, ? ,?)")
         .bind(user.name.to_string())
@@ -38,23 +39,23 @@ pub async fn create_user(conn: &MySqlPool, user: &mut NewUser) -> anyhow::Result
         return Err(anyhow::Error::new(affected));
     }
 
-    let insert_id = sqlx::query("SELECT LAST_INSERT_ID()")
-        .map(|row: MySqlRow| i64::from(row.get::<i64, _>(0)))
-        .fetch_one(&mut tx)
-        .await;
-
+    let insert_id = fetch_last_insert_id(conn).await;
     if let Err(res) = insert_id {
         tx.rollback().await?;
-        return Err(anyhow::Error::new(res));
+        return Err(res);
     }
 
     tx.commit().await?;
-    match insert_id {
-        Ok(insert_id) => {
-            let id = insert_id;
-            user.id = Some(id);
-            Ok(id)
-        }
-        _ => Err(anyhow::Error::new(insert_id.err().unwrap())),
-    }
+    let id = insert_id?;
+    user.id = Some(id);
+    Ok(id)
+}
+
+async fn fetch_last_insert_id(conn: &MySqlPool) -> anyhow::Result<u64> {
+    let insert_id = sqlx::query("SELECT LAST_INSERT_ID()")
+        .map(|row: MySqlRow| u64::from(row.get::<u64, _>(0)))
+        .fetch_one(conn)
+        .await?;
+
+    Ok(insert_id)
 }
