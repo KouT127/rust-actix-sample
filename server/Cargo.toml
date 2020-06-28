@@ -1,0 +1,20 @@
+[package]
+name = "server"
+version = "0.1.0"
+authors = ["Koichi Tada <kou26haru@gmail.com>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+actix-web = "2.0"
+actix-rt = "1.0"
+log = "0.4.8"
+env_logger = "0.7.1"
+dotenv = "0.15.0"
+chrono = {version = "0.4.11", features = ["serde"]}
+tera = "1.0"
+anyhow = "1.0.31"
+validator = "0.10"
+validator_derive = "0.10"
+repository = {path="../repository"}
+model={path="../model"}

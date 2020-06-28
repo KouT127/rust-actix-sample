@@ -1,6 +1,17 @@
-use crate::models::{NewUser, User};
+use model::user::{NewUser, User};
 use sqlx::mysql::MySqlRow;
 use sqlx::{MySqlPool, Row};
+
+pub async fn new_pool() -> MySqlPool {
+    let url = std::env::var("DATABASE_URL").expect("Database URL is not exists");
+
+    MySqlPool::builder()
+        .min_size(0)
+        .max_size(5)
+        .build(&url)
+        .await
+        .expect("Failed to mysql")
+}
 
 pub async fn find_users(conn: &MySqlPool) -> anyhow::Result<Vec<User>> {
     // ex: Use macro

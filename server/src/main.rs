@@ -1,31 +1,11 @@
-pub mod actions;
-pub mod models;
-
-use crate::actions::{create_user, find_users, update_user};
-use crate::models::{NewUser, User, UserPayload, UserResponse};
 use actix_web::middleware::Logger;
-use actix_web::{web, App, HttpResponse, HttpServer, Route};
+use actix_web::{web, App, HttpResponse, HttpServer};
 use chrono::Utc;
-use sqlx::{MySqlConnection, MySqlPool, Pool};
+use model::context::Context;
+use model::user::{NewUser, User, UserPayload, UserResponse};
+use repository::{create_user, find_users, new_pool, update_user};
 use std::env;
 use tera::Tera;
-
-pub struct Context {
-    pool: Pool<MySqlConnection>,
-    template: Tera,
-}
-
-pub async fn new_pool() -> MySqlPool {
-    let url = std::env::var("DATABASE_URL").expect("Database URL is not exists");
-
-    MySqlPool::builder()
-        .min_size(0)
-        .max_size(5)
-        .test_on_acquire(true)
-        .build(&url)
-        .await
-        .expect("Failed to mysql")
-}
 
 async fn fetch_users_handler(context: web::Data<Context>) -> HttpResponse {
     let pool = context.pool.clone();

@@ -1,0 +1,11 @@
+[package]
+name = "repository"
+version = "0.1.0"
+authors = ["Koichi Tada <kou26haru@gmail.com>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+sqlx = { version = "0.3.5", default-features = false, features = [ "runtime-tokio", "macros", "mysql", "chrono" ] }
+anyhow = "1.0.31"
+model = {path="../model"}
