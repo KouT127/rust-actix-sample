@@ -32,6 +32,23 @@ pub async fn find_users(conn: &MySqlPool) -> anyhow::Result<Vec<User>> {
 }
 
 pub async fn create_user(conn: &MySqlPool, user: &mut NewUser) -> anyhow::Result<u64> {
+    let mut tx = conn.begin().await?;
+    sqlx::query("INSERT INTO users (name, created_at, updated_at) value (?, ? ,?)")
+        .bind(user.name.to_string())
+        .bind(user.created_at)
+        .bind(user.updated_at)
+        .execute(&mut tx)
+        .await?;
+
+    let insert_id = sqlx::query("SELECT LAST_INSERT_ID()")
+        .map(|row: MySqlRow| u64::from(row.get::<u64, _>(0)))
+        .fetch_one(&mut tx)
+        .await?;
+    user.id = Some(insert_id);
+    tx.commit().await?;
+    Ok(insert_id)
+}
+
     sqlx::query("INSERT INTO users (name, created_at, updated_at) value (?, ? ,?)")
         .bind(user.name.to_string())
         .bind(user.created_at)
