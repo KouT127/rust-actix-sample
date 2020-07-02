@@ -3,6 +3,7 @@ members = [
     "model",
     "repository",
     "server",
-    "handler"
-]
+    "handler",
+    "script"
+ ]
 

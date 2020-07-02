@@ -1,0 +1,9 @@
+[package]
+name = "script"
+version = "0.1.0"
+authors = ["Koichi Tada <kou26haru@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+clap = "2.33.1"
+anyhow = "1.0.31"
