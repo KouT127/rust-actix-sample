@@ -1,69 +1,61 @@
+#[macro_use]
+extern crate diesel;
+
+use diesel::prelude::*;
+use diesel::r2d2::ConnectionManager;
+use diesel::{insert_into, select, update, MysqlConnection};
+use model::context::MySqlPool;
 use model::user::{NewUser, User};
-use sqlx::mysql::MySqlRow;
-use sqlx::{MySqlPool, Row};
+use std::thread::sleep;
+use std::time::Duration;
+
+no_arg_sql_function!(
+    last_insert_id,
+    diesel::types::Unsigned<diesel::types::Bigint>
+);
 
 pub async fn new_pool() -> MySqlPool {
     let url = std::env::var("DATABASE_URL").expect("Database URL is not exists");
-
-    MySqlPool::builder()
-        .min_size(0)
-        .max_size(5)
-        .build(&url)
-        .await
-        .expect("Failed to mysql")
+    let manager = ConnectionManager::<MysqlConnection>::new(url);
+    r2d2::Pool::builder()
+        .max_size(10)
+        .build(manager)
+        .map_err(|error| panic!(error))
+        .unwrap()
 }
 
-pub async fn find_users(conn: &MySqlPool) -> anyhow::Result<Vec<User>> {
-    // ex: Use macro
-    // let users = sqlx::query_as!(User, "SELECT * FROM users limit 10")
-    //     .fetch_all(conn)
-    //     .await;
+pub fn find_users(conn: &MysqlConnection) -> anyhow::Result<Vec<User>> {
+    use model::schema::users::dsl::{id, users};
+    let result = users
+        .limit(10)
+        .order(id.desc())
+        .load::<User>(conn)
+        .expect("Error loading posts");
 
-    let users = sqlx::query("SELECT * FROM users limit 10")
-        .map(|row: MySqlRow| User {
-            id: row.get("id"),
-            name: row.get("name"),
-            created_at: row.get("created_at"),
-            updated_at: row.get("updated_at"),
-        })
-        .fetch_all(conn)
-        .await?;
-    Ok(users)
+    Ok(result)
 }
 
-pub async fn create_user(conn: &MySqlPool, user: &mut NewUser) -> anyhow::Result<u64> {
-    let mut tx = conn.begin().await?;
-    sqlx::query("INSERT INTO users (name, created_at, updated_at) value (?, ? ,?)")
-        .bind(user.name.to_string())
-        .bind(user.created_at)
-        .bind(user.updated_at)
-        .execute(&mut tx)
-        .await?;
-
-    let insert_id = sqlx::query("SELECT LAST_INSERT_ID()")
-        .map(|row: MySqlRow| u64::from(row.get::<u64, _>(0)))
-        .fetch_one(&mut tx)
-        .await?;
-    user.id = Some(insert_id);
-    tx.commit().await?;
-    Ok(insert_id)
+pub fn create_user<'a>(conn: &MysqlConnection, user: &NewUser<'a>) -> anyhow::Result<User> {
+    use model::schema::users::dsl::users;
+    insert_into(users).values(user).execute(conn)?;
+    let generated_id: u64 = select(last_insert_id).first(conn).unwrap();
+    let new_user = user.to_user(generated_id);
+    Ok(new_user)
 }
 
-pub async fn update_user(conn: &MySqlPool, user: &User) -> anyhow::Result<()> {
-    sqlx::query("UPDATE users SET name = ?,  updated_at = ? WHERE id = ?")
-        .bind(user.name.to_owned())
-        .bind(user.updated_at)
-        .bind(user.id)
-        .execute(conn)
-        .await?;
-    Ok(())
+pub fn create_user2<'a>(conn: &MysqlConnection, user: &NewUser<'a>) -> anyhow::Result<User> {
+    use model::schema::users::dsl::users;
+    insert_into(users).values(user).execute(conn)?;
+    sleep(Duration::from_secs(10));
+    let generated_id: u64 = select(last_insert_id).first(conn).unwrap();
+    let new_user = user.to_user(generated_id);
+    Ok(new_user)
 }
 
-async fn fetch_last_insert_id(conn: &MySqlPool) -> anyhow::Result<u64> {
-    let insert_id = sqlx::query("SELECT LAST_INSERT_ID()")
-        .map(|row: MySqlRow| u64::from(row.get::<u64, _>(0)))
-        .fetch_one(conn)
-        .await?;
-
-    Ok(insert_id)
+pub fn update_user(conn: &MysqlConnection, user: &User) -> anyhow::Result<User> {
+    use model::schema::users::dsl::{id, name, users};
+    update(users.filter(id.eq(user.id)))
+        .set(name.eq("test"))
+        .execute(conn)?;
+    Ok(user.clone())
 }

@@ -1,0 +1,2 @@
+[print_schema]
+file = "model/src/schema.rs"

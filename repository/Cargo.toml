@@ -6,7 +6,7 @@ edition = "2018"
 publish = false
 
 [dependencies]
-sqlx = { version = "0.3.5", default-features = false, features = [ "runtime-tokio", "macros", "mysql", "chrono" ] }
 anyhow = "1.0.31"
 model = {path="../model"}
-diesel = { version = "1.4.4", features = ["mysql","chrono"] }
+diesel = { version = "1.4.5", features = ["mysql", "r2d2", "chrono"] }
+r2d2 = "0.8.9"

@@ -18,3 +18,4 @@ validator = "0.10"
 validator_derive = "0.10"
 repository = {path="../repository"}
 model={path="../model"}
+diesel = { version = "1.4.5", features = ["mysql"] }

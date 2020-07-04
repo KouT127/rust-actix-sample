@@ -1,21 +1,35 @@
+use super::schema::users;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
+#[derive(Queryable, Debug, Clone)]
 pub struct User {
     pub id: u64,
     pub name: String,
     pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    pub updated_at: Option<NaiveDateTime>,
 }
 
-#[derive(Debug)]
-pub struct NewUser {
-    pub id: Option<u64>,
-    pub name: String,
+#[derive(Insertable, Debug, Clone)]
+#[table_name = "users"]
+pub struct NewUser<'a> {
+    pub name: &'a str,
     pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    pub updated_at: Option<NaiveDateTime>,
 }
+
+impl<'a> NewUser<'a> {
+    pub fn to_user(&self, id: u64) -> User {
+        User {
+            id,
+            name: self.name.to_owned(),
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+        }
+    }
+}
+
+impl<'a> Copy for NewUser<'a> {}
 
 #[derive(Serialize)]
 pub struct UserResponse {
@@ -31,15 +45,7 @@ impl UserResponse {
             id: user.id,
             name: user.name.clone(),
             created_at: user.created_at,
-            updated_at: user.updated_at,
-        }
-    }
-    pub fn from_new_user(user: &NewUser) -> Self {
-        UserResponse {
-            id: user.id.unwrap(),
-            name: user.name.clone(),
-            created_at: user.created_at,
-            updated_at: user.updated_at,
+            updated_at: user.updated_at.unwrap(),
         }
     }
 }

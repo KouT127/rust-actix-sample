@@ -1,17 +1,31 @@
+extern crate diesel;
+
 use actix_web::middleware::Logger;
 use actix_web::{web, App, HttpResponse, HttpServer};
 use chrono::Utc;
+use diesel::*;
 use model::context::Context;
 use model::user::{NewUser, User, UserPayload, UserResponse};
-use repository::{create_user, find_users, new_pool, update_user};
+use repository::{create_user, create_user2, find_users, new_pool, update_user};
 use std::env;
+use std::thread::sleep;
+use std::time::Duration;
 use tera::Tera;
 
 async fn fetch_users_handler(context: web::Data<Context>) -> HttpResponse {
-    let pool = context.pool.clone();
-    let users = find_users(&pool).await;
+    if let Err(error) = context.pool.get() {
+        println!("{}", error);
+        return HttpResponse::BadRequest().json("error");
+    }
+    let users = web::block(move || {
+        let pool = context.pool.get().unwrap();
 
-    if let Err(_) = users {
+        pool.transaction(|| find_users(&pool))
+    })
+    .await;
+
+    if let Err(error) = users {
+        println!("{}", error);
         return HttpResponse::BadRequest().json("error");
     }
     let responses = users
@@ -26,20 +40,55 @@ async fn create_user_handler(
     context: web::Data<Context>,
     payload: web::Json<UserPayload>,
 ) -> HttpResponse {
-    let pool = &context.pool;
-    let mut user = NewUser {
-        id: None,
-        name: payload.name.to_owned(),
-        created_at: Utc::now().naive_utc(),
-        updated_at: Utc::now().naive_utc(),
-    };
+    if let Err(error) = context.pool.get() {
+        println!("{}", error);
+        return HttpResponse::BadRequest().json("error");
+    }
+    let user = web::block(move || {
+        let pool = context.pool.get().unwrap();
+        let mut user = NewUser {
+            name: payload.name.as_str(),
+            created_at: Utc::now().naive_utc(),
+            updated_at: Some(Utc::now().naive_utc()),
+        };
+        pool.transaction(|| create_user(&pool, &mut user))
+    })
+    .await;
 
-    let result = create_user(pool, &mut user).await;
-    if let Err(_) = result {
+    if let Err(error) = user {
+        println!("{}", error);
         return HttpResponse::BadRequest().json("error");
     }
 
-    let responses = UserResponse::from_new_user(&user);
+    let responses = UserResponse::from_user(&user.unwrap());
+    HttpResponse::Ok().json(&responses)
+}
+
+async fn create_user_handler1(
+    context: web::Data<Context>,
+    payload: web::Json<UserPayload>,
+) -> HttpResponse {
+    if let Err(error) = context.pool.get() {
+        println!("{}", error);
+        return HttpResponse::BadRequest().json("error");
+    }
+    let user = web::block(move || {
+        let pool = context.pool.get().unwrap();
+        let mut user = NewUser {
+            name: payload.name.as_str(),
+            created_at: Utc::now().naive_utc(),
+            updated_at: Some(Utc::now().naive_utc()),
+        };
+        pool.transaction(|| create_user2(&pool, &mut user))
+    })
+    .await;
+
+    if let Err(error) = user {
+        println!("{}", error);
+        return HttpResponse::BadRequest().json("error");
+    }
+
+    let responses = UserResponse::from_user(&user.unwrap());
     HttpResponse::Ok().json(&responses)
 }
 
@@ -48,18 +97,22 @@ async fn update_user_handler(
     context: web::Data<Context>,
     payload: web::Json<UserPayload>,
 ) -> HttpResponse {
+    if let Err(error) = context.pool.get() {
+        println!("{}", error);
+        return HttpResponse::BadRequest().json("error");
+    }
+    let pool = context.pool.get().unwrap();
     let user_id = path.to_owned();
-
-    let pool = &context.pool;
     let user = User {
         id: user_id,
         name: payload.name.to_owned(),
         created_at: Utc::now().naive_utc(),
-        updated_at: Utc::now().naive_utc(),
+        updated_at: Some(Utc::now().naive_utc()),
     };
 
-    let result = update_user(pool, &user).await;
-    if let Err(_) = result {
+    let updated_user = update_user(&pool, &user);
+    if let Err(error) = updated_user {
+        println!("{}", error);
         return HttpResponse::BadRequest().json("error");
     }
 
@@ -104,6 +157,7 @@ async fn main() -> std::io::Result<()> {
                     .route(web::post().to(create_user_handler))
                     .route(web::get().to(fetch_users_handler)),
             )
+            .service(web::resource("/v1/users1").route(web::post().to(create_user_handler1)))
             .service(web::resource("/v1/users/{user_id}").route(web::put().to(update_user_handler)))
     })
     .workers(1)
