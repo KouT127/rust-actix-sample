@@ -49,18 +49,6 @@ pub async fn create_user(conn: &MySqlPool, user: &mut NewUser) -> anyhow::Result
     Ok(insert_id)
 }
 
-    sqlx::query("INSERT INTO users (name, created_at, updated_at) value (?, ? ,?)")
-        .bind(user.name.to_string())
-        .bind(user.created_at)
-        .bind(user.updated_at)
-        .execute(conn)
-        .await?;
-
-    let insert_id = fetch_last_insert_id(conn).await?;
-    user.id = Some(insert_id);
-    Ok(insert_id)
-}
-
 pub async fn update_user(conn: &MySqlPool, user: &User) -> anyhow::Result<()> {
     sqlx::query("UPDATE users SET name = ?,  updated_at = ? WHERE id = ?")
         .bind(user.name.to_owned())
