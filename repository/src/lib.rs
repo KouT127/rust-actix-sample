@@ -6,8 +6,6 @@ use diesel::r2d2::ConnectionManager;
 use diesel::{insert_into, select, update, MysqlConnection};
 use model::context::MySqlPool;
 use model::user::{NewUser, User};
-use std::thread::sleep;
-use std::time::Duration;
 
 no_arg_sql_function!(
     last_insert_id,
@@ -30,7 +28,7 @@ pub fn find_users(conn: &MysqlConnection) -> anyhow::Result<Vec<User>> {
         .limit(10)
         .order(id.desc())
         .load::<User>(conn)
-        .expect("Error loading posts");
+        .expect("Error loading users");
 
     Ok(result)
 }
@@ -38,15 +36,6 @@ pub fn find_users(conn: &MysqlConnection) -> anyhow::Result<Vec<User>> {
 pub fn create_user<'a>(conn: &MysqlConnection, user: &NewUser<'a>) -> anyhow::Result<User> {
     use model::schema::users::dsl::users;
     insert_into(users).values(user).execute(conn)?;
-    let generated_id: u64 = select(last_insert_id).first(conn).unwrap();
-    let new_user = user.to_user(generated_id);
-    Ok(new_user)
-}
-
-pub fn create_user2<'a>(conn: &MysqlConnection, user: &NewUser<'a>) -> anyhow::Result<User> {
-    use model::schema::users::dsl::users;
-    insert_into(users).values(user).execute(conn)?;
-    sleep(Duration::from_secs(10));
     let generated_id: u64 = select(last_insert_id).first(conn).unwrap();
     let new_user = user.to_user(generated_id);
     Ok(new_user)
