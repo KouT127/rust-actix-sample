@@ -1,39 +1,50 @@
 extern crate diesel;
 
 use actix_web::middleware::Logger;
-use actix_web::{web, App, HttpResponse, HttpServer};
+use actix_web::{App, HttpResponse, HttpServer};
 use chrono::Utc;
 use diesel::*;
 use model::context::Context;
-use model::user::{NewUser, User, UserPayload, UserResponse};
+use model::user::{FindUsersResponse, NewUser, User, UserPayload, UserResponse};
+use paperclip::actix::{
+    api_v2_operation,
+    web::{self, Json},
+    OpenApiExt,
+};
 use repository::{create_user, find_users, new_pool, update_user};
 use std::env;
 use tera::Tera;
 
-async fn fetch_users_handler(context: web::Data<Context>) -> HttpResponse {
+#[api_v2_operation]
+async fn fetch_users_handler(
+    context: web::Data<Context>,
+) -> Result<Json<FindUsersResponse>, actix_web::Error> {
     if let Err(error) = context.pool.get() {
         println!("{}", error);
-        return HttpResponse::BadRequest().json("error");
+        return Err(actix_web::error::ErrorBadRequest("error"));
     }
     let users = web::block(move || {
         let pool = context.pool.get().unwrap();
-
         pool.transaction(|| find_users(&pool))
     })
     .await;
 
     if let Err(error) = users {
         println!("{}", error);
-        return HttpResponse::BadRequest().json("error");
+        return Err(actix_web::error::ErrorBadRequest("error"));
     }
     let responses = users
         .unwrap()
         .iter()
         .map(|user| UserResponse::from_user(&user))
         .collect::<Vec<UserResponse>>();
-    HttpResponse::Ok().json(&responses)
+
+    Ok(Json(FindUsersResponse {
+        user_responses: responses,
+    }))
 }
 
+#[api_v2_operation]
 async fn create_user_handler(
     context: web::Data<Context>,
     payload: web::Json<UserPayload>,
@@ -62,6 +73,7 @@ async fn create_user_handler(
     HttpResponse::Ok().json(&responses)
 }
 
+#[api_v2_operation]
 async fn update_user_handler(
     path: web::Path<u64>,
     context: web::Data<Context>,
@@ -121,6 +133,8 @@ async fn main() -> std::io::Result<()> {
             .data(web::JsonConfig::default().limit(4096))
             .wrap(Logger::default())
             .app_data(context.clone())
+            .wrap_api()
+            .with_json_spec_at("/v1/spec")
             .service(web::resource("/users").route(web::get().to(sample_template)))
             .service(
                 web::resource("/v1/users")
@@ -128,6 +142,7 @@ async fn main() -> std::io::Result<()> {
                     .route(web::get().to(fetch_users_handler)),
             )
             .service(web::resource("/v1/users/{user_id}").route(web::put().to(update_user_handler)))
+            .build()
     })
     .workers(1)
     .bind(&url)?

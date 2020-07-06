@@ -1,5 +1,6 @@
 use super::schema::users;
 use chrono::NaiveDateTime;
+use paperclip::actix::Apiv2Schema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Queryable, Debug, Clone)]
@@ -29,12 +30,15 @@ impl<'a> NewUser<'a> {
     }
 }
 
-impl<'a> Copy for NewUser<'a> {}
+#[derive(Debug, Serialize, Deserialize, Apiv2Schema)]
+pub struct FindUsersResponse {
+    pub user_responses: Vec<UserResponse>,
+}
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize, Deserialize, Apiv2Schema)]
 pub struct UserResponse {
     pub id: u64,
-    pub name: String,
+    pub nickname: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -43,14 +47,14 @@ impl UserResponse {
     pub fn from_user(user: &User) -> Self {
         UserResponse {
             id: user.id,
-            name: user.name.clone(),
+            nickname: user.name.clone(),
             created_at: user.created_at,
             updated_at: user.updated_at.unwrap(),
         }
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Apiv2Schema)]
 pub struct UserPayload {
     pub name: String,
 }
