@@ -78,12 +78,11 @@ async fn update_user_handler(
     path: web::Path<u64>,
     context: web::Data<Context>,
     payload: web::Json<UserPayload>,
-) -> HttpResponse {
-    if let Err(error) = context.pool.get() {
+) -> Result<Json<UserResponse>, actix_web::Error> {
+    let pool = context.pool.get().map_err(|error| {
         println!("{}", error);
-        return HttpResponse::BadRequest().json("error");
-    }
-    let pool = context.pool.get().unwrap();
+        return actix_web::error::ErrorBadRequest("error");
+    })?;
     let user_id = path.to_owned();
     let user = User {
         id: user_id,
@@ -91,15 +90,12 @@ async fn update_user_handler(
         created_at: Utc::now().naive_utc(),
         updated_at: Some(Utc::now().naive_utc()),
     };
-
-    let updated_user = update_user(&pool, &user);
-    if let Err(error) = updated_user {
+    let updated_user = update_user(&pool, &user).map_err(|error| {
         println!("{}", error);
-        return HttpResponse::BadRequest().json("error");
-    }
+        return actix_web::error::ErrorBadRequest("error");
+    })?;
 
-    let responses = UserResponse::from_user(&user);
-    HttpResponse::Ok().json(&responses)
+    Ok(Json(UserResponse::from_user(&updated_user)))
 }
 
 async fn sample_template(context: web::Data<Context>) -> HttpResponse {
@@ -133,9 +129,9 @@ async fn main() -> std::io::Result<()> {
             .data(web::JsonConfig::default().limit(4096))
             .wrap(Logger::default())
             .app_data(context.clone())
+            .service(web::resource("/users").route(web::get().to(sample_template)))
             .wrap_api()
             .with_json_spec_at("/v1/spec")
-            .service(web::resource("/users").route(web::get().to(sample_template)))
             .service(
                 web::resource("/v1/users")
                     .route(web::post().to(create_user_handler))
