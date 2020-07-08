@@ -1,60 +1,44 @@
 extern crate diesel;
 
 use actix_web::middleware::Logger;
-use actix_web::{App, HttpResponse, HttpServer};
+use actix_web::{web, App, HttpResponse, HttpServer};
 use chrono::Utc;
 use diesel::*;
 use model::context::Context;
 use model::user::{FindUsersResponse, NewUser, User, UserPayload, UserResponse};
-use paperclip::actix::{
-    api_v2_operation,
-    web::{self, Json},
-    OpenApiExt,
-};
+
+use actix_web::web::Json;
 use repository::{create_user, find_users, new_pool, update_user};
 use std::env;
 use tera::Tera;
 
-#[api_v2_operation]
 async fn fetch_users_handler(
     context: web::Data<Context>,
 ) -> Result<Json<FindUsersResponse>, actix_web::Error> {
-    if let Err(error) = context.pool.get() {
-        println!("{}", error);
-        return Err(actix_web::error::ErrorBadRequest("error"));
-    }
     let users = web::block(move || {
-        let pool = context.pool.get().unwrap();
-        pool.transaction(|| find_users(&pool))
+        let pool = context.pool.get().map_err(|error| error)?;
+        find_users(&pool)
     })
-    .await;
-
-    if let Err(error) = users {
+    .await
+    .map_err(|error| {
         println!("{}", error);
-        return Err(actix_web::error::ErrorBadRequest("error"));
-    }
+        return actix_web::error::ErrorBadRequest("error");
+    })?;
+
     let responses = users
-        .unwrap()
         .iter()
         .map(|user| UserResponse::from_user(&user))
         .collect::<Vec<UserResponse>>();
 
-    Ok(Json(FindUsersResponse {
-        user_responses: responses,
-    }))
+    Ok(Json(FindUsersResponse { responses }))
 }
 
-#[api_v2_operation]
 async fn create_user_handler(
     context: web::Data<Context>,
     payload: web::Json<UserPayload>,
-) -> HttpResponse {
-    if let Err(error) = context.pool.get() {
-        println!("{}", error);
-        return HttpResponse::BadRequest().json("error");
-    }
+) -> Result<Json<UserResponse>, actix_web::Error> {
     let user = web::block(move || {
-        let pool = context.pool.get().unwrap();
+        let pool = context.pool.get()?;
         let mut user = NewUser {
             name: payload.name.as_str(),
             created_at: Utc::now().naive_utc(),
@@ -62,18 +46,15 @@ async fn create_user_handler(
         };
         pool.transaction(|| create_user(&pool, &mut user))
     })
-    .await;
-
-    if let Err(error) = user {
+    .await
+    .map_err(|error| {
         println!("{}", error);
-        return HttpResponse::BadRequest().json("error");
-    }
+        return actix_web::error::ErrorBadRequest("error");
+    })?;
 
-    let responses = UserResponse::from_user(&user.unwrap());
-    HttpResponse::Ok().json(&responses)
+    Ok(Json(UserResponse::from_user(&user)))
 }
 
-#[api_v2_operation]
 async fn update_user_handler(
     path: web::Path<u64>,
     context: web::Data<Context>,
@@ -90,12 +71,12 @@ async fn update_user_handler(
         created_at: Utc::now().naive_utc(),
         updated_at: Some(Utc::now().naive_utc()),
     };
-    let updated_user = update_user(&pool, &user).map_err(|error| {
+    update_user(&pool, &user).map_err(|error| {
         println!("{}", error);
         return actix_web::error::ErrorBadRequest("error");
     })?;
 
-    Ok(Json(UserResponse::from_user(&updated_user)))
+    Ok(Json(UserResponse::from_user(&user)))
 }
 
 async fn sample_template(context: web::Data<Context>) -> HttpResponse {
@@ -130,15 +111,12 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::default())
             .app_data(context.clone())
             .service(web::resource("/users").route(web::get().to(sample_template)))
-            .wrap_api()
-            .with_json_spec_at("/v1/spec")
             .service(
                 web::resource("/v1/users")
                     .route(web::post().to(create_user_handler))
                     .route(web::get().to(fetch_users_handler)),
             )
             .service(web::resource("/v1/users/{user_id}").route(web::put().to(update_user_handler)))
-            .build()
     })
     .workers(1)
     .bind(&url)?
