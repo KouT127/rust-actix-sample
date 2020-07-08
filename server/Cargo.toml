@@ -16,7 +16,9 @@ tera = "1.0"
 anyhow = "1.0.31"
 validator = "0.10"
 validator_derive = "0.10"
-repository = {path="../repository"}
-model={path="../model"}
 diesel = { version = "1.4.5", features = ["mysql"] }
 serde = "1.0"
+
+repository = {path = "../repository"}
+handler = {path = "../handler"}
+model = {path = "../model"}

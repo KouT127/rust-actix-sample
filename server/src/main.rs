@@ -2,82 +2,11 @@ extern crate diesel;
 
 use actix_web::middleware::Logger;
 use actix_web::{web, App, HttpResponse, HttpServer};
-use chrono::Utc;
-use diesel::*;
+use handler::Handler;
 use model::context::Context;
-use model::user::{FindUsersResponse, NewUser, User, UserPayload, UserResponse};
-
-use actix_web::web::Json;
-use repository::{create_user, find_users, new_pool, update_user};
+use repository::new_pool;
 use std::env;
 use tera::Tera;
-
-async fn fetch_users_handler(
-    context: web::Data<Context>,
-) -> Result<Json<FindUsersResponse>, actix_web::Error> {
-    let users = web::block(move || {
-        let pool = context.pool.get().map_err(|error| error)?;
-        find_users(&pool)
-    })
-    .await
-    .map_err(|error| {
-        println!("{}", error);
-        return actix_web::error::ErrorBadRequest("error");
-    })?;
-
-    let responses = users
-        .iter()
-        .map(|user| UserResponse::from_user(&user))
-        .collect::<Vec<UserResponse>>();
-
-    Ok(Json(FindUsersResponse { responses }))
-}
-
-async fn create_user_handler(
-    context: web::Data<Context>,
-    payload: web::Json<UserPayload>,
-) -> Result<Json<UserResponse>, actix_web::Error> {
-    let user = web::block(move || {
-        let pool = context.pool.get()?;
-        let mut user = NewUser {
-            name: payload.name.as_str(),
-            created_at: Utc::now().naive_utc(),
-            updated_at: Some(Utc::now().naive_utc()),
-        };
-        pool.transaction(|| create_user(&pool, &mut user))
-    })
-    .await
-    .map_err(|error| {
-        println!("{}", error);
-        return actix_web::error::ErrorBadRequest("error");
-    })?;
-
-    Ok(Json(UserResponse::from_user(&user)))
-}
-
-async fn update_user_handler(
-    path: web::Path<u64>,
-    context: web::Data<Context>,
-    payload: web::Json<UserPayload>,
-) -> Result<Json<UserResponse>, actix_web::Error> {
-    let pool = context.pool.get().map_err(|error| {
-        println!("{}", error);
-        return actix_web::error::ErrorBadRequest("error");
-    })?;
-    let user_id = path.to_owned();
-    let user = User {
-        id: user_id,
-        name: payload.name.to_owned(),
-        created_at: Utc::now().naive_utc(),
-        updated_at: Some(Utc::now().naive_utc()),
-    };
-    update_user(&pool, &user).map_err(|error| {
-        println!("{}", error);
-        return actix_web::error::ErrorBadRequest("error");
-    })?;
-
-    Ok(Json(UserResponse::from_user(&user)))
-}
 
 async fn sample_template(context: web::Data<Context>) -> HttpResponse {
     let tmpl = &context.template;
@@ -113,10 +42,13 @@ async fn main() -> std::io::Result<()> {
             .service(web::resource("/users").route(web::get().to(sample_template)))
             .service(
                 web::resource("/v1/users")
-                    .route(web::post().to(create_user_handler))
-                    .route(web::get().to(fetch_users_handler)),
+                    .route(web::post().to(handler::UserHandler::create_user_handler))
+                    .route(web::get().to(handler::UserHandler::get_users_handler)),
             )
-            .service(web::resource("/v1/users/{user_id}").route(web::put().to(update_user_handler)))
+            .service(
+                web::resource("/v1/users/{user_id}")
+                    .route(web::put().to(handler::UserHandler::update_user_handler)),
+            )
     })
     .workers(1)
     .bind(&url)?

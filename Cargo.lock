@@ -908,6 +908,14 @@ dependencies = [
 [[package]]
 name = "handler"
 version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "async-trait",
+ "chrono",
+ "diesel",
+ "model",
+ "repository",
+]
 
 [[package]]
 name = "heck"
@@ -1719,6 +1727,7 @@ dependencies = [
  "diesel",
  "dotenv",
  "env_logger",
+ "handler",
  "log",
  "model",
  "repository",
