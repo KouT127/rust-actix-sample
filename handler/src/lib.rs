@@ -3,12 +3,12 @@ use actix_web::web::Json;
 use async_trait::async_trait;
 use chrono::Utc;
 use diesel::Connection;
-use model::context::Context;
+use model::context::{Context, Handler, Repository};
 use model::user::{FindUsersResponse, NewUser, User, UserPayload, UserResponse};
-use repository;
+use repository::UserRepository;
 
 #[async_trait]
-pub trait Handler {
+pub trait UserHandler {
     async fn get_users_handler(
         context: web::Data<Context>,
     ) -> Result<Json<FindUsersResponse>, actix_web::Error>;
@@ -25,16 +25,14 @@ pub trait Handler {
     ) -> Result<Json<UserResponse>, actix_web::Error>;
 }
 
-pub struct UserHandler;
-
 #[async_trait]
-impl Handler for UserHandler {
+impl UserHandler for Handler {
     async fn get_users_handler(
         context: web::Data<Context>,
     ) -> Result<Json<FindUsersResponse>, actix_web::Error> {
         let users = web::block(move || {
-            let pool = context.pool.get().map_err(|error| error)?;
-            repository::find_users(&pool)
+            let repo = Repository::build(&context.pool)?;
+            repo.find_users()
         })
         .await
         .map_err(|error| {
@@ -55,13 +53,13 @@ impl Handler for UserHandler {
         payload: web::Json<UserPayload>,
     ) -> Result<Json<UserResponse>, actix_web::Error> {
         let user = web::block(move || {
-            let pool = context.pool.get()?;
-            let mut user = NewUser {
+            let repo = Repository::build(&context.pool)?;
+            let user = NewUser {
                 name: payload.name.as_str(),
                 created_at: Utc::now().naive_utc(),
                 updated_at: Some(Utc::now().naive_utc()),
             };
-            pool.transaction(|| repository::create_user(&pool, &mut user))
+            repo.conn.transaction(|| repo.create_user(&user))
         })
         .await
         .map_err(|error| {
@@ -77,18 +75,19 @@ impl Handler for UserHandler {
         context: web::Data<Context>,
         payload: web::Json<UserPayload>,
     ) -> Result<Json<UserResponse>, actix_web::Error> {
-        let pool = context.pool.get().map_err(|error| {
-            println!("{}", error);
-            return actix_web::error::ErrorBadRequest("error");
-        })?;
-        let user_id = path.to_owned();
-        let user = User {
-            id: user_id,
-            name: payload.name.to_owned(),
-            created_at: Utc::now().naive_utc(),
-            updated_at: Some(Utc::now().naive_utc()),
-        };
-        repository::update_user(&pool, &user).map_err(|error| {
+        let user = web::block(move || {
+            let repo = Repository::build(&context.pool)?;
+            let user_id = path.to_owned();
+            let user = User {
+                id: user_id,
+                name: payload.name.to_owned(),
+                created_at: Utc::now().naive_utc(),
+                updated_at: Some(Utc::now().naive_utc()),
+            };
+            repo.update_user(&user)
+        })
+        .await
+        .map_err(|error| {
             println!("{}", error);
             return actix_web::error::ErrorBadRequest("error");
         })?;

@@ -2,8 +2,8 @@ extern crate diesel;
 
 use actix_web::middleware::Logger;
 use actix_web::{web, App, HttpResponse, HttpServer};
-use handler::Handler;
-use model::context::Context;
+use handler::UserHandler;
+use model::context::{Context, Handler};
 use repository::new_pool;
 use std::env;
 use tera::Tera;
@@ -28,9 +28,9 @@ async fn main() -> std::io::Result<()> {
     env_logger::builder().init();
     let url = "127.0.0.1:8080";
     let templates = Tera::new("templates/**/*").unwrap();
-    let new_pool = new_pool().await;
+    let pool = new_pool().await;
     let context = web::Data::new(Context {
-        pool: new_pool,
+        pool,
         template: templates,
     });
 
@@ -42,12 +42,12 @@ async fn main() -> std::io::Result<()> {
             .service(web::resource("/users").route(web::get().to(sample_template)))
             .service(
                 web::resource("/v1/users")
-                    .route(web::post().to(handler::UserHandler::create_user_handler))
-                    .route(web::get().to(handler::UserHandler::get_users_handler)),
+                    .route(web::post().to(Handler::create_user_handler))
+                    .route(web::get().to(Handler::get_users_handler)),
             )
             .service(
                 web::resource("/v1/users/{user_id}")
-                    .route(web::put().to(handler::UserHandler::update_user_handler)),
+                    .route(web::put().to(Handler::update_user_handler)),
             )
     })
     .workers(1)
