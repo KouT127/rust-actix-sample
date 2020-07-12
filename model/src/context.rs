@@ -1,5 +1,5 @@
 use diesel::r2d2::ConnectionManager;
-use diesel::{Connection, MysqlConnection};
+use diesel::MysqlConnection;
 use r2d2::{Pool, PooledConnection};
 use tera::Tera;
 
@@ -13,13 +13,4 @@ pub struct Context {
 
 pub struct Handler;
 
-pub struct Repository {
-    pub conn: MysqlPooled,
-}
-
-impl Repository {
-    pub fn build(pool: &MySqlPool) -> anyhow::Result<Self> {
-        let conn = pool.get()?;
-        Ok(Self { conn })
-    }
-}
+pub struct Repository;

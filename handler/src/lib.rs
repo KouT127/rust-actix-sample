@@ -31,8 +31,8 @@ impl UserHandler for Handler {
         context: web::Data<Context>,
     ) -> Result<Json<FindUsersResponse>, actix_web::Error> {
         let users = web::block(move || {
-            let repo = Repository::build(&context.pool)?;
-            repo.find_users()
+            let conn = context.pool.get()?;
+            Repository::find_users(&conn)
         })
         .await
         .map_err(|error| {
@@ -53,13 +53,13 @@ impl UserHandler for Handler {
         payload: web::Json<UserPayload>,
     ) -> Result<Json<UserResponse>, actix_web::Error> {
         let user = web::block(move || {
-            let repo = Repository::build(&context.pool)?;
+            let conn = context.pool.get()?;
             let user = NewUser {
                 name: payload.name.as_str(),
                 created_at: Utc::now().naive_utc(),
                 updated_at: Some(Utc::now().naive_utc()),
             };
-            repo.conn.transaction(|| repo.create_user(&user))
+            conn.transaction(|| Repository::create_user(&conn, &user))
         })
         .await
         .map_err(|error| {
@@ -76,7 +76,7 @@ impl UserHandler for Handler {
         payload: web::Json<UserPayload>,
     ) -> Result<Json<UserResponse>, actix_web::Error> {
         let user = web::block(move || {
-            let repo = Repository::build(&context.pool)?;
+            let conn = context.pool.get()?;
             let user_id = path.to_owned();
             let user = User {
                 id: user_id,
@@ -84,7 +84,7 @@ impl UserHandler for Handler {
                 created_at: Utc::now().naive_utc(),
                 updated_at: Some(Utc::now().naive_utc()),
             };
-            repo.update_user(&user)
+            Repository::update_user(&conn, &user)
         })
         .await
         .map_err(|error| {

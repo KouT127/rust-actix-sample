@@ -1585,6 +1585,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "diesel",
+ "dotenv",
  "model",
  "r2d2",
 ]

@@ -5,7 +5,7 @@ use diesel::prelude::*;
 use diesel::r2d2::ConnectionManager;
 use diesel::result::Error::RollbackTransaction;
 use diesel::{insert_into, select, update, MysqlConnection};
-use model::context::{MySqlPool, Repository};
+use model::context::{MySqlPool, MysqlPooled, Repository};
 use model::user::{NewUser, User};
 
 no_arg_sql_function!(
@@ -29,40 +29,40 @@ pub fn establish_connection() -> ConnectionResult<MysqlConnection> {
 }
 
 pub trait UserRepository {
-    fn find_users(&self) -> anyhow::Result<Vec<User>>;
-    fn create_user<'a>(&self, user: &NewUser<'a>) -> anyhow::Result<User>;
-    fn update_user(&self, user: &User) -> anyhow::Result<User>;
+    fn find_users(conn: &MysqlPooled) -> anyhow::Result<Vec<User>>;
+    fn create_user<'a>(conn: &MysqlPooled, user: &NewUser<'a>) -> anyhow::Result<User>;
+    fn update_user(conn: &MysqlPooled, user: &User) -> anyhow::Result<User>;
 }
 
 impl UserRepository for Repository {
-    fn find_users(&self) -> anyhow::Result<Vec<User>> {
+    fn find_users(conn: &MysqlPooled) -> anyhow::Result<Vec<User>> {
         use model::schema::users::dsl::{id, users};
         users
             .limit(10)
             .order(id.desc())
-            .load::<User>(&self.conn)
+            .load::<User>(conn)
             .map_err(|error| anyhow::Error::new(error))
     }
 
-    fn create_user<'a>(&self, user: &NewUser<'a>) -> anyhow::Result<User> {
+    fn create_user<'a>(conn: &MysqlPooled, user: &NewUser<'a>) -> anyhow::Result<User> {
         use model::schema::users::dsl::users;
         insert_into(users)
             .values(user)
-            .execute(&self.conn)
+            .execute(conn)
             .map_err(|error| {
                 println!("{}", error);
                 RollbackTransaction
             })?;
-        let generated_id: u64 = select(last_insert_id).first(&self.conn).unwrap();
+        let generated_id: u64 = select(last_insert_id).first(conn).unwrap();
         let new_user = user.to_user(generated_id);
         Ok(new_user)
     }
 
-    fn update_user(&self, user: &User) -> anyhow::Result<User> {
+    fn update_user(conn: &MysqlPooled, user: &User) -> anyhow::Result<User> {
         use model::schema::users::dsl::{id, name, users};
         update(users.filter(id.eq(user.id)))
             .set(name.eq(user.name.to_owned()))
-            .execute(&self.conn)
+            .execute(conn)
             .map_err(|error| {
                 println!("{}", error);
                 RollbackTransaction
@@ -74,10 +74,17 @@ impl UserRepository for Repository {
 #[cfg(test)]
 mod tests {
     use crate::establish_connection;
+    use model::context::Repository;
 
     #[test]
     fn establishing_connection() {
         let result = establish_connection();
         assert!(result.is_ok())
+    }
+
+    #[test]
+    fn finding_user() {
+        let result = establish_connection();
+        assert!(result.is_ok());
     }
 }
