@@ -13,19 +13,16 @@ no_arg_sql_function!(
     diesel::types::Unsigned<diesel::types::Bigint>
 );
 
-pub async fn new_pool() -> MySqlPool {
-    let url = std::env::var("DATABASE_URL").expect("Database URL is not exists");
-    let manager = ConnectionManager::<MysqlConnection>::new(url);
-    r2d2::Pool::builder()
-        .max_size(2)
-        .build(manager)
-        .expect("Failed to connect")
+pub fn get_url_from_env() -> String {
+    std::env::var("DATABASE_URL").expect("Database URL is not exists")
 }
 
-pub fn establish_connection() -> ConnectionResult<MysqlConnection> {
-    dotenv::from_filename(".env.test").ok().unwrap_or_default();
-    let url = std::env::var("DATABASE_URL").expect("Database URL is not exists");
-    diesel::MysqlConnection::establish(url.as_str())
+pub fn new_pool(url: String, pool_size: u32) -> MySqlPool {
+    let manager = ConnectionManager::<MysqlConnection>::new(url);
+    r2d2::Pool::builder()
+        .max_size(pool_size)
+        .build(manager)
+        .expect("Failed to connect")
 }
 
 pub trait UserRepository {
@@ -73,18 +70,20 @@ impl UserRepository for Repository {
 
 #[cfg(test)]
 mod tests {
-    use crate::establish_connection;
+    use crate::{get_url_from_env, new_pool, UserRepository};
     use model::context::Repository;
-
-    #[test]
-    fn establishing_connection() {
-        let result = establish_connection();
-        assert!(result.is_ok())
-    }
+    use model::user::User;
 
     #[test]
     fn finding_user() {
-        let result = establish_connection();
-        assert!(result.is_ok());
+        assert!(dotenv::from_filename(".env.test").is_ok());
+        let url = get_url_from_env();
+        let pool = new_pool(url, 1);
+        let conn = pool.get();
+        assert!(conn.is_ok());
+        let users = Repository::find_users(&conn.unwrap());
+        assert!(users.is_ok());
+        let expected = Vec::<User>::new();
+        assert_eq!(users.unwrap(), expected);
     }
 }

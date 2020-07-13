@@ -4,7 +4,7 @@ use actix_web::middleware::Logger;
 use actix_web::{web, App, HttpResponse, HttpServer};
 use handler::UserHandler;
 use model::context::{Context, Handler};
-use repository::new_pool;
+use repository::{get_url_from_env, new_pool};
 use std::env;
 use tera::Tera;
 
@@ -28,7 +28,8 @@ async fn main() -> std::io::Result<()> {
     env_logger::builder().init();
     let url = "127.0.0.1:8080";
     let templates = Tera::new("templates/**/*").unwrap();
-    let pool = new_pool().await;
+    let database_url = get_url_from_env();
+    let pool = new_pool(database_url, 4);
     let context = web::Data::new(Context {
         pool,
         template: templates,
