@@ -1,3 +1,5 @@
+extern crate validator;
+
 use actix_web::web;
 use actix_web::web::Json;
 use async_trait::async_trait;
@@ -6,6 +8,7 @@ use diesel::Connection;
 use model::context::{Context, Handler, Repository};
 use model::user::{FindUsersResponse, NewUser, User, UserPayload, UserResponse};
 use repository::UserRepository;
+use validator::Validate;
 
 #[async_trait]
 pub trait UserHandler {
@@ -36,8 +39,8 @@ impl UserHandler for Handler {
         })
         .await
         .map_err(|error| {
-            println!("{}", error);
-            return actix_web::error::ErrorBadRequest("error");
+            println!("{:?}", error);
+            actix_web::error::ErrorBadRequest("error")
         })?;
 
         let responses = users
@@ -52,6 +55,10 @@ impl UserHandler for Handler {
         context: web::Data<Context>,
         payload: web::Json<UserPayload>,
     ) -> Result<Json<UserResponse>, actix_web::Error> {
+        if let Err(error) = payload.validate() {
+            println!("{:?}", error);
+            return Err(actix_web::error::ErrorBadRequest("error"));
+        }
         let user = web::block(move || {
             let conn = context.pool.get()?;
             let user = NewUser {
@@ -63,8 +70,8 @@ impl UserHandler for Handler {
         })
         .await
         .map_err(|error| {
-            println!("{}", error);
-            return actix_web::error::ErrorBadRequest("error");
+            println!("{:?}", error);
+            actix_web::error::ErrorBadRequest("error")
         })?;
 
         Ok(Json(UserResponse::from_user(&user)))
@@ -75,6 +82,10 @@ impl UserHandler for Handler {
         context: web::Data<Context>,
         payload: web::Json<UserPayload>,
     ) -> Result<Json<UserResponse>, actix_web::Error> {
+        if let Err(error) = payload.validate() {
+            println!("{:?}", error);
+            return Err(actix_web::error::ErrorBadRequest("error"));
+        }
         let user = web::block(move || {
             let conn = context.pool.get()?;
             let user_id = path.to_owned();
@@ -88,8 +99,8 @@ impl UserHandler for Handler {
         })
         .await
         .map_err(|error| {
-            println!("{}", error);
-            return actix_web::error::ErrorBadRequest("error");
+            println!("{:?}", error);
+            actix_web::error::ErrorBadRequest("error")
         })?;
 
         Ok(Json(UserResponse::from_user(&user)))

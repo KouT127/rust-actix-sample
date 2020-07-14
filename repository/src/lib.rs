@@ -27,6 +27,7 @@ pub fn new_pool(url: String, pool_size: u32) -> MySqlPool {
 
 pub trait UserRepository {
     fn find_users(conn: &MysqlPooled) -> anyhow::Result<Vec<User>>;
+    fn find_user(conn: &MysqlPooled, user_id: u64) -> anyhow::Result<User>;
     fn create_user<'a>(conn: &MysqlPooled, user: &NewUser<'a>) -> anyhow::Result<User>;
     fn update_user(conn: &MysqlPooled, user: &User) -> anyhow::Result<User>;
 }
@@ -38,7 +39,15 @@ impl UserRepository for Repository {
             .limit(10)
             .order(id.desc())
             .load::<User>(conn)
-            .map_err(|error| anyhow::Error::new(error))
+            .map_err(anyhow::Error::new)
+    }
+
+    fn find_user(conn: &MysqlPooled, user_id: u64) -> anyhow::Result<User> {
+        use model::schema::users::dsl::{id, users};
+        users
+            .filter(id.eq(user_id))
+            .first::<User>(conn)
+            .map_err(anyhow::Error::new)
     }
 
     fn create_user<'a>(conn: &MysqlPooled, user: &NewUser<'a>) -> anyhow::Result<User> {
@@ -71,11 +80,14 @@ impl UserRepository for Repository {
 #[cfg(test)]
 mod tests {
     use crate::{get_url_from_env, new_pool, UserRepository};
-    use model::context::Repository;
-    use model::user::User;
+    use chrono::{Duration, DurationRound, Utc};
+    use diesel::result::Error::RollbackTransaction;
+    use diesel::Connection;
+    use model::context::{MysqlPooled, Repository};
+    use model::user::{NewUser, User};
 
     #[test]
-    fn finding_user() {
+    fn test_find_user() {
         assert!(dotenv::from_filename(".env.test").is_ok());
         let url = get_url_from_env();
         let pool = new_pool(url, 1);
@@ -85,5 +97,67 @@ mod tests {
         assert!(users.is_ok());
         let expected = Vec::<User>::new();
         assert_eq!(users.unwrap(), expected);
+    }
+
+    fn new_user(conn: &MysqlPooled) -> User {
+        let new = NewUser {
+            name: "insert",
+            created_at: Utc::now()
+                .duration_trunc(Duration::seconds(1))
+                .unwrap()
+                .naive_utc(),
+            updated_at: Some(
+                Utc::now()
+                    .duration_trunc(Duration::seconds(1))
+                    .unwrap()
+                    .naive_utc(),
+            ),
+        };
+        Repository::create_user(&conn, &new).unwrap()
+    }
+
+    #[test]
+    fn test_create_user() {
+        assert!(dotenv::from_filename(".env.test").is_ok());
+        let url = get_url_from_env();
+        let pool = new_pool(url, 1);
+        let conn = pool.get().unwrap();
+
+        let _ = conn.transaction::<(), _, _>(|| {
+            let inserted_user = new_user(&conn);
+            let user = Repository::find_user(&conn, inserted_user.id);
+            assert!(user.is_ok());
+            assert_eq!(inserted_user, user.unwrap());
+            Err(RollbackTransaction)
+        });
+    }
+
+    #[test]
+    fn test_update_user() {
+        assert!(dotenv::from_filename(".env.test").is_ok());
+        let url = get_url_from_env();
+        let pool = new_pool(url, 1);
+        let conn = pool.get().unwrap();
+
+        let _ = conn.transaction::<(), _, _>(|| {
+            let inserted_user = new_user(&conn);
+            let update_user = User {
+                id: inserted_user.id,
+                name: "updated".to_string(),
+                created_at: inserted_user.created_at,
+                updated_at: Some(
+                    Utc::now()
+                        .duration_trunc(Duration::seconds(1))
+                        .unwrap()
+                        .naive_utc(),
+                ),
+            };
+
+            let updated_user = Repository::update_user(&conn, &update_user).unwrap();
+            let user = Repository::find_user(&conn, updated_user.id);
+            assert!(user.is_ok());
+            assert_eq!(updated_user, user.unwrap());
+            Err(RollbackTransaction)
+        });
     }
 }

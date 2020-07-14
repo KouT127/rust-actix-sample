@@ -2,6 +2,7 @@ use super::schema::users;
 use chrono::NaiveDateTime;
 
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
 #[derive(Queryable, Debug, Clone, PartialEq)]
 pub struct User {
@@ -11,7 +12,7 @@ pub struct User {
     pub updated_at: Option<NaiveDateTime>,
 }
 
-#[derive(Insertable, Debug, Clone)]
+#[derive(Insertable, Debug, Clone, PartialEq)]
 #[table_name = "users"]
 pub struct NewUser<'a> {
     pub name: &'a str,
@@ -54,7 +55,8 @@ impl UserResponse {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct UserPayload {
+    #[validate(length(min = 1, max = 20))]
     pub name: String,
 }

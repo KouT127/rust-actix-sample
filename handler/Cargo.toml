@@ -8,8 +8,9 @@ edition = "2018"
 
 [dependencies]
 actix-web = "2.0"
-chrono = {version = "0.4.11"}
+chrono = {version = "0.4.13"}
 diesel = { version = "1.4.5", features = ["mysql"] }
 async-trait = "0.1.36"
+validator = "0.10"
 model = {path="../model"}
 repository = {path="../repository"}
