@@ -1,5 +1,5 @@
 use super::schema::users;
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 
 use serde::{Deserialize, Serialize};
 use validator::Validate;
@@ -20,7 +20,24 @@ pub struct NewUser<'a> {
     pub updated_at: Option<NaiveDateTime>,
 }
 
+impl<'a> Default for NewUser<'a> {
+    fn default() -> NewUser<'a> {
+        NewUser {
+            name: "",
+            created_at: Utc::now().naive_utc(),
+            updated_at: Some(Utc::now().naive_utc()),
+        }
+    }
+}
+
 impl<'a> NewUser<'a> {
+    pub fn new(name: &str) -> NewUser {
+        NewUser {
+            name,
+            ..NewUser::default()
+        }
+    }
+
     pub fn to_user(&self, id: u64) -> User {
         User {
             id,

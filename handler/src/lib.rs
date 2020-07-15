@@ -61,11 +61,7 @@ impl UserHandler for Handler {
         }
         let user = web::block(move || {
             let conn = context.pool.get()?;
-            let user = NewUser {
-                name: payload.name.as_str(),
-                created_at: Utc::now().naive_utc(),
-                updated_at: Some(Utc::now().naive_utc()),
-            };
+            let user = NewUser::new(payload.name.as_str());
             conn.transaction(|| Repository::create_user(&conn, &user))
         })
         .await
