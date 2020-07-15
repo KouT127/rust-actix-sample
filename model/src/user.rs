@@ -77,3 +77,39 @@ pub struct UserPayload {
     #[validate(length(min = 1, max = 20))]
     pub name: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::user::UserPayload;
+    use crate::validator::{Validate, ValidationErrors};
+
+    #[test]
+    fn validate_user_payload_with_valid_value() {
+        let payload = UserPayload {
+            name: "1".to_string(),
+        };
+
+        let result: Result<(), ValidationErrors> = payload.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_user_payload_when_too_long_value() {
+        let payload = UserPayload {
+            name: "123456789012345678901".to_string(),
+        };
+
+        let result: Result<(), ValidationErrors> = payload.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_user_payload_when_empty_string() {
+        let payload = UserPayload {
+            name: "".to_string(),
+        };
+
+        let result: Result<(), ValidationErrors> = payload.validate();
+        assert!(result.is_err());
+    }
+}
