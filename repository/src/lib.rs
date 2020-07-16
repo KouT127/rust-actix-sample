@@ -28,7 +28,7 @@ pub fn new_pool(url: String, pool_size: u32) -> MySqlPool {
 pub trait UserRepository {
     fn find_users(conn: &MysqlPooled) -> anyhow::Result<Vec<User>>;
     fn find_user(conn: &MysqlPooled, user_id: u64) -> anyhow::Result<User>;
-    fn create_user<'a>(conn: &MysqlPooled, user: &NewUser<'a>) -> anyhow::Result<User>;
+    fn create_user(conn: &MysqlPooled, user: &NewUser) -> anyhow::Result<User>;
     fn update_user(conn: &MysqlPooled, user: &User) -> anyhow::Result<User>;
 }
 
@@ -50,7 +50,7 @@ impl UserRepository for Repository {
             .map_err(anyhow::Error::new)
     }
 
-    fn create_user<'a>(conn: &MysqlPooled, user: &NewUser<'a>) -> anyhow::Result<User> {
+    fn create_user(conn: &MysqlPooled, user: &NewUser) -> anyhow::Result<User> {
         use model::schema::users::dsl::users;
         insert_into(users)
             .values(user)
@@ -81,27 +81,15 @@ impl UserRepository for Repository {
 mod tests {
     use crate::{get_url_from_env, new_pool, UserRepository};
     use chrono::{Duration, DurationRound, Utc};
+    use diesel::result::Error;
     use diesel::result::Error::RollbackTransaction;
     use diesel::Connection;
     use model::context::{MysqlPooled, Repository};
     use model::user::{NewUser, User};
 
-    #[test]
-    fn test_find_user() {
-        assert!(dotenv::from_filename(".env.test").is_ok());
-        let url = get_url_from_env();
-        let pool = new_pool(url, 1);
-        let conn = pool.get();
-        assert!(conn.is_ok());
-        let users = Repository::find_users(&conn.unwrap());
-        assert!(users.is_ok());
-        let expected = Vec::<User>::new();
-        assert_eq!(users.unwrap(), expected);
-    }
-
     fn new_user(conn: &MysqlPooled) -> User {
         let new = NewUser {
-            name: "insert",
+            name: "insert".to_string(),
             created_at: Utc::now()
                 .duration_trunc(Duration::seconds(1))
                 .unwrap()
@@ -117,13 +105,31 @@ mod tests {
     }
 
     #[test]
+    fn test_find_users() {
+        assert!(dotenv::from_filename(".env.test").is_ok());
+        let url = get_url_from_env();
+        let pool = new_pool(url, 1);
+        let conn = pool.get().unwrap();
+        let _ = conn.transaction::<(), Error, _>(|| {
+            let inserted_user = new_user(&conn);
+            let inserted_user2 = new_user(&conn);
+            let expected_users = [inserted_user2, inserted_user];
+
+            let users = Repository::find_users(&conn);
+            assert!(users.is_ok());
+            assert_eq!(users.unwrap(), expected_users);
+            Err(RollbackTransaction)
+        });
+    }
+
+    #[test]
     fn test_create_user() {
         assert!(dotenv::from_filename(".env.test").is_ok());
         let url = get_url_from_env();
         let pool = new_pool(url, 1);
         let conn = pool.get().unwrap();
 
-        let _ = conn.transaction::<(), _, _>(|| {
+        let _ = conn.transaction::<(), Error, _>(|| {
             let inserted_user = new_user(&conn);
             let user = Repository::find_user(&conn, inserted_user.id);
             assert!(user.is_ok());
@@ -139,7 +145,7 @@ mod tests {
         let pool = new_pool(url, 1);
         let conn = pool.get().unwrap();
 
-        let _ = conn.transaction::<(), _, _>(|| {
+        let _ = conn.transaction::<(), Error, _>(|| {
             let inserted_user = new_user(&conn);
             let update_user = User {
                 id: inserted_user.id,

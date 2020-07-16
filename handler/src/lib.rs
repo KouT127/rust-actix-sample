@@ -61,7 +61,10 @@ impl UserHandler for Handler {
         }
         let user = web::block(move || {
             let conn = context.pool.get()?;
-            let user = NewUser::new(payload.name.as_str());
+            let user = NewUser {
+                name: payload.name.clone(),
+                ..NewUser::default()
+            };
             conn.transaction(|| Repository::create_user(&conn, &user))
         })
         .await

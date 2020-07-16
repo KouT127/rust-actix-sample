@@ -2,6 +2,7 @@ use super::schema::users;
 use chrono::{NaiveDateTime, Utc};
 
 use serde::{Deserialize, Serialize};
+use std::default::Default;
 use validator::Validate;
 
 #[derive(Queryable, Debug, Clone, PartialEq)]
@@ -14,34 +15,27 @@ pub struct User {
 
 #[derive(Insertable, Debug, Clone, PartialEq)]
 #[table_name = "users"]
-pub struct NewUser<'a> {
-    pub name: &'a str,
+pub struct NewUser {
+    pub name: String,
     pub created_at: NaiveDateTime,
     pub updated_at: Option<NaiveDateTime>,
 }
 
-impl<'a> Default for NewUser<'a> {
-    fn default() -> NewUser<'a> {
+impl Default for NewUser {
+    fn default() -> NewUser {
         NewUser {
-            name: "",
+            name: "".to_string(),
             created_at: Utc::now().naive_utc(),
             updated_at: Some(Utc::now().naive_utc()),
         }
     }
 }
 
-impl<'a> NewUser<'a> {
-    pub fn new(name: &str) -> NewUser {
-        NewUser {
-            name,
-            ..NewUser::default()
-        }
-    }
-
+impl NewUser {
     pub fn to_user(&self, id: u64) -> User {
         User {
             id,
-            name: self.name.to_owned(),
+            name: self.name.clone(),
             created_at: self.created_at,
             updated_at: self.updated_at,
         }
@@ -94,7 +88,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_user_payload_when_too_long_value() {
+    fn validate_user_payload_with_too_long_value() {
         let payload = UserPayload {
             name: "123456789012345678901".to_string(),
         };
@@ -104,7 +98,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_user_payload_when_empty_string() {
+    fn validate_user_payload_with_empty_string() {
         let payload = UserPayload {
             name: "".to_string(),
         };
