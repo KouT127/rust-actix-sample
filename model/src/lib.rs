@@ -7,4 +7,5 @@ extern crate validator;
 
 pub mod context;
 pub mod schema;
+pub mod task;
 pub mod user;

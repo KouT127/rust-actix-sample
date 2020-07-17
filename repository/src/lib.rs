@@ -6,7 +6,8 @@ use diesel::r2d2::ConnectionManager;
 use diesel::result::Error::RollbackTransaction;
 use diesel::{insert_into, select, update, MysqlConnection};
 use model::context::{MySqlPool, MysqlPooled, Repository};
-use model::user::{NewUser, User};
+use model::task::Task;
+use model::user::{NewUser, Task, User};
 
 no_arg_sql_function!(
     last_insert_id,
@@ -23,6 +24,22 @@ pub fn new_pool(url: String, pool_size: u32) -> MySqlPool {
         .max_size(pool_size)
         .build(manager)
         .expect("Failed to connect")
+}
+
+pub trait TaskRepository {
+    fn find_task(conn: &MysqlPooled, task_id: u64) -> anyhow::Result<(Task, User)>;
+}
+
+impl TaskRepository for Repository {
+    fn find_task(conn: &MysqlPooled, task_id: u64) -> anyhow::Result<(Task, User)> {
+        use model::schema::*;
+
+        tasks::table
+            .inner_join(users::table.on(users::dsl::id.eq(tasks::dsl::id)))
+            .filter(tasks::dsl::id.eq(task_id))
+            .first::<(Task, User)>(conn)
+            .map_err(anyhow::Error::new)
+    }
 }
 
 pub trait UserRepository {
