@@ -1,3 +1,5 @@
+use chrono::NaiveDateTime;
+
 #[derive(Queryable, Debug, Clone, PartialEq)]
 pub struct Task {
     pub id: u64,

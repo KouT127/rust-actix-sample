@@ -7,7 +7,7 @@ use diesel::result::Error::RollbackTransaction;
 use diesel::{insert_into, select, update, MysqlConnection};
 use model::context::{MySqlPool, MysqlPooled, Repository};
 use model::task::Task;
-use model::user::{NewUser, Task, User};
+use model::user::{NewUser, User};
 
 no_arg_sql_function!(
     last_insert_id,
