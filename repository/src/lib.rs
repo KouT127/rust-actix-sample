@@ -42,6 +42,16 @@ impl TaskRepository for Repository {
     }
 }
 
+
+
+pub async fn new_redis_client(redis_url: &str) -> anyhow::Result<redis::aio::MultiplexedConnection> {
+    let client = redis::Client::open(redis_url).map_err(anyhow::Error::new)?;
+    client
+        .get_multiplexed_async_std_connection()
+        .await
+        .map_err(anyhow::Error::new)
+}
+
 pub trait UserRepository {
     fn find_users(conn: &MysqlPooled) -> anyhow::Result<Vec<User>>;
     fn find_user(conn: &MysqlPooled, user_id: u64) -> anyhow::Result<User>;
@@ -96,7 +106,7 @@ impl UserRepository for Repository {
 
 #[cfg(test)]
 mod tests {
-    use crate::{get_url_from_env, new_pool, UserRepository};
+    use crate::{UserRepository, get_url_from_env, new_pool, new_redis_client};
     use chrono::{Duration, DurationRound, Utc};
     use diesel::result::Error;
     use diesel::result::Error::RollbackTransaction;
@@ -182,5 +192,11 @@ mod tests {
             assert_eq!(updated_user, user.unwrap());
             Err(RollbackTransaction)
         });
+    }
+
+    #[tokio::test]
+    async fn connect_redis() {
+       let client = new_redis_client("redis://localhost:6379").await;
+       assert!(client.is_ok())
     }
 }
