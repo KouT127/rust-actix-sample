@@ -23,9 +23,12 @@ async fn sample_template(context: web::Data<Context>) -> HttpResponse {
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
-    env::set_var("RUST_LOG", "info");
+    env::set_var(
+        "RUST_LOG",
+        "rust-actix-sample=debug,actix_web=info,actix_server=info",
+    );
     dotenv::dotenv().ok();
-    env_logger::builder().init();
+    env_logger::init();
     let url = "127.0.0.1:8080";
     let templates = Tera::new("templates/**/*").unwrap();
     let database_url = get_url_from_env();
@@ -37,18 +40,21 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
-            .data(web::JsonConfig::default().limit(4096))
             .wrap(Logger::default())
             .app_data(context.clone())
             .service(web::resource("/users").route(web::get().to(sample_template)))
+            .data(web::JsonConfig::default().limit(4096))
             .service(
-                web::resource("/v1/users")
-                    .route(web::post().to(Handler::create_user_handler))
-                    .route(web::get().to(Handler::get_users_handler)),
-            )
-            .service(
-                web::resource("/v1/users/{user_id}")
-                    .route(web::put().to(Handler::update_user_handler)),
+                web::scope("/v1")
+                    .service(
+                        web::resource("/users")
+                            .route(web::post().to(Handler::create_user_handler))
+                            .route(web::get().to(Handler::get_users_handler)),
+                    )
+                    .service(
+                        web::resource("/users/{user_id}")
+                            .route(web::put().to(Handler::update_user_handler)),
+                    ),
             )
     })
     .workers(1)
