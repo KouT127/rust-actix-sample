@@ -12,5 +12,7 @@ r2d2 = "0.8.9"
 dotenv = "0.15.0"
 chrono = "0.4.13"
 redis = "0.17.0"
-tokio = { version = "0.3", features = ["full"] }
-model = {path="../model"}
+tokio = { version = "0.3", features = ["full", "macros"] }
+model = { path = "../model" }
+quaint = { git = "https://github.com/prisma/quaint", features = ["mysql"], branch = "master"  }
+mysql_async = "0.25.0"
