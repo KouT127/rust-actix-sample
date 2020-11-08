@@ -11,8 +11,11 @@ diesel = { version = "1.4.5", features = ["mysql", "r2d2", "chrono"] }
 r2d2 = "0.8.9"
 dotenv = "0.15.0"
 chrono = "0.4.13"
-redis = "0.17.0"
-tokio = { version = "0.3", features = ["full", "macros"] }
 model = { path = "../model" }
-quaint = { git = "https://github.com/prisma/quaint", features = ["mysql"], branch = "master"  }
+quaint = { git = "https://github.com/prisma/quaint", features = ["mysql", "chrono", "serde-support"], branch = "master"  }
 mysql_async = "0.25.0"
+async-trait = "0.1.41"
+
+[dev-dependencies]
+tokio = { version = "0.2", features = ["full", "macros"] }
+

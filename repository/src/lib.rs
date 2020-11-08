@@ -1,26 +1,22 @@
 #[macro_use]
 extern crate diesel;
 
+use async_trait::async_trait;
 use chrono::Utc;
 use diesel::result::Error::RollbackTransaction;
 use diesel::{insert_into, select, update, MysqlConnection};
 use model::context::{MySqlPool, MysqlPooled, Repository};
 use model::task::Task;
 use model::user::{NewUser, User};
-use mysql_async::prelude::Queryable;
 use mysql_async::{Params, Value};
 use quaint::connector::ResultSetIterator;
 use quaint::connector::SqlFamily::Mysql;
-use quaint::prelude::Select;
+use quaint::prelude::*;
+use quaint::single::Quaint;
 use quaint::visitor::Visitor;
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
 use std::ops::{Add, Deref};
-
-no_arg_sql_function!(
-    last_insert_id,
-    diesel::types::Unsigned<diesel::types::Bigint>
-);
 
 pub fn get_url_from_env() -> String {
     std::env::var("DATABASE_URL").expect("Database URL is not exists")
@@ -35,12 +31,14 @@ pub fn new_pool(url: String, pool_size: u32) -> MySqlPool {
         .expect("Failed to connect")
 }
 
+#[async_trait]
 pub trait TaskRepository {
-    fn find_task(conn: &MysqlPooled, task_id: u64) -> anyhow::Result<(Task, User)>;
+    async fn find_task(task_id: u64) -> anyhow::Result<(Task, User)>;
 }
 
+#[async_trait]
 impl TaskRepository for Repository {
-    fn find_task(conn: &MysqlPooled, task_id: u64) -> anyhow::Result<(Task, User)> {
+    async fn find_task(task_id: u64) -> anyhow::Result<(Task, User)> {
         Ok((
             Task {
                 id: 0,
@@ -51,7 +49,7 @@ impl TaskRepository for Repository {
                 updated_at: None,
             },
             User {
-                id: 0,
+                id: Some(0),
                 name: "".to_string(),
                 created_at: Utc::now().naive_utc(),
                 updated_at: None,
@@ -60,108 +58,72 @@ impl TaskRepository for Repository {
     }
 }
 
+#[async_trait]
 pub trait UserRepository {
-    fn find_users(conn: &MysqlPooled) -> anyhow::Result<Vec<User>>;
-    fn find_user(conn: &MysqlPooled, user_id: u64) -> anyhow::Result<User>;
-    fn create_user(conn: &MysqlPooled, user: &NewUser) -> anyhow::Result<User>;
-    fn update_user(conn: &MysqlPooled, user: &User) -> anyhow::Result<User>;
+    async fn find_users(conn: &MysqlPooled) -> anyhow::Result<Vec<User>>;
+    async fn find_user(user_id: u64) -> anyhow::Result<User>;
+    async fn create_user(user: &NewUser) -> anyhow::Result<User>;
+    async fn update_user(user: &User) -> anyhow::Result<User>;
 }
 
 impl UserRepository for Repository {
-    fn find_users(conn: &MysqlPooled) -> anyhow::Result<Vec<User>> {
-        Ok(Vec::new())
+    async fn find_users(conn: &MysqlPooled) -> anyhow::Result<Vec<User>> {
+        let url = get_url_from_env();
+        let conn = Quaint::new(url.as_str()).await?;
+        let statement = Select::from_table("users").limit(10);
+        let result_set: ResultSetIterator = conn.select(statement).await?.into_iter();
+        let users: Vec<User> = result_set
+            .map(|row| {
+                let user: User = quaint::serde::from_row(row)?;
+                user
+            })
+            .collect();
+        Ok(users)
     }
 
-    fn find_user(conn: &MysqlPooled, user_id: u64) -> anyhow::Result<User> {
+    async fn find_user(user_id: u64) -> anyhow::Result<User> {
+        let url = get_url_from_env();
+        let conn = Quaint::new(url.as_str()).await?;
+        let statement = Select::from_table("users")
+            .so_that("id".equals(user_id))
+            .limit(1);
+        let row = conn.select(statement).await?.into_single().unwrap();
+        let user: User = quaint::serde::from_row(row)?;
+        Ok(user)
+    }
+
+    async fn create_user(user: &User) -> anyhow::Result<User> {
+        let url = get_url_from_env();
+        let conn = Quaint::new(url.as_str()).await?;
+        let tx = conn.start_transaction().await?;
+        let statement = Insert::single_into("users")
+            .value("name", &user.name)
+            .value("created_at", Utc::now())
+            .value("updated_at", Utc::now())
+            .build();
+        let result_set = tx.insert(statement).await?;
+        tx.commit().await?;
+
         Ok(User {
-            id: 0,
-            name: "".to_string(),
-            created_at: Utc::now().naive_utc(),
-            updated_at: None,
+            id: result_set.last_insert_id(),
+            ..user.clone()
         })
     }
 
-    fn create_user(conn: &MysqlPooled, user: &NewUser) -> anyhow::Result<User> {
-        Ok(User {
-            id: 0,
-            name: "".to_string(),
-            created_at: Utc::now().naive_utc(),
-            updated_at: None,
-        })
+    async fn update_user(user: &User) -> anyhow::Result<u64> {
+        let id = user.id?;
+        let url = get_url_from_env();
+        let conn = Quaint::new(url.as_str()).await?;
+        let tx = conn.start_transaction().await?;
+        let statement = Update::table("users")
+            .set("name", &user.name)
+            .so_that("id".equals(id));
+
+        let affected_rows_count = tx.update(statement).await?;
+        tx.commit().await?;
+
+        Ok(affected_rows_count)
     }
-
-    fn update_user(conn: &MysqlPooled, user: &User) -> anyhow::Result<User> {
-        Ok(User {
-            id: 0,
-            name: "".to_string(),
-            created_at: Utc::now().naive_utc(),
-            updated_at: None,
-        })
-    }
-}
-
-async fn build_query() -> Vec<User> {
-    use quaint::{prelude::*, single::Quaint};
-    let conn = Quaint::new("").await;
-
-    // let conditions = "word"
-    //     .equals("meow")
-    //     .and("age".less_than(10))
-    //     .and("paw".equals("warm"));
-
-    let query = Select::from_table("users").limit(10);
-    let result = conn.unwrap().select(query).await.unwrap();
-    let result_iterator: ResultSetIterator = result.into_iter();
-    result_iterator
-        .map(|row| User {
-            id: row[0].as_i64().unwrap() as u64,
-            name: row[1].as_str().unwrap().to_owned(),
-            created_at: Utc::now().naive_local(),
-            updated_at: None,
-        })
-        .collect::<Vec<User>>()
-}
-
-async fn hoge() {
-    use mysql_async::prelude::*;
-
-    let pool = mysql_async::Pool::new("");
-    let mut conn = pool.get_conn().await.unwrap();
-    let mut v = HashMap::with_hasher(BuildHasherDefault::default());
-
-    let statement = "SELECT customer_id, amount, account_name 
-        from users 
-        where id = :foo"
-        .to_owned();
-
-    let statement = statement.add("o = :ok");
-    v.insert("test".to_owned(), Value::Bytes("".to_owned().into_bytes()));
-
-    let statement = conn.prep(statement).await.unwrap();
-
-    let users = conn
-        .exec_map(
-            &statement,
-            Params::Named(v),
-            |(id, name, created_at, updated_at)| User {
-                id,
-                name,
-                created_at,
-                updated_at,
-            },
-        )
-        .await;
-    let users = conn
-        .query_map(
-            "SELECT customer_id, amount, account_name from payment",
-            |(id, name, created_at, updated_at)| User {
-                id,
-                name,
-                created_at,
-                updated_at,
-            },
-        )
-        .await;
 }
 
 #[cfg(test)]
@@ -191,25 +153,23 @@ mod tests {
                     .naive_utc(),
             ),
         };
-        Repository::create_user(&conn, &new).unwrap()
+        Repository::create_user(&new).unwrap()
     }
 
     #[tokio::test]
     async fn build_query() {
-        tokio::spawn(async {
-            assert!(dotenv::from_filename(".env.test").is_ok());
-            let url = get_url_from_env();
-            let conn = Quaint::new(url.as_str()).await.unwrap();
-            let insert = Insert::single_into("users").value("name", "test").build();
-            match conn.insert(insert.clone()).await {
-                Err(error) => println!("{:?}", error),
-                _ => {}
-            }
-            let result = conn.insert(insert).await;
-            println!("{:?}", result);
-        })
-        .await
-        .unwrap();
+        assert!(dotenv::from_filename(".env.test").is_ok());
+        let url = get_url_from_env();
+        let conn = Quaint::new(url.as_str()).await.unwrap();
+        let tx = conn.start_transaction().await.unwrap();
+
+        let insert = Insert::single_into("users")
+            .value("name", "test")
+            .value("created_at", Utc::now())
+            .value("updated_at", Utc::now())
+            .build();
+        let result = tx.insert(insert).await;
+        println!("{:?}", result);
     }
 
     #[test]
@@ -218,16 +178,14 @@ mod tests {
         let url = get_url_from_env();
         let pool = new_pool(url, 1);
         let conn = pool.get().unwrap();
-        let _ = conn.transaction::<(), Error, _>(|| {
-            let inserted_user = new_user(&conn);
-            let inserted_user2 = new_user(&conn);
-            let expected_users = [inserted_user2, inserted_user];
+        let inserted_user = new_user(&conn);
+        let inserted_user2 = new_user(&conn);
+        let expected_users = [inserted_user2, inserted_user];
 
-            let users = Repository::find_users(&conn);
-            assert!(users.is_ok());
-            assert_eq!(users.unwrap(), expected_users);
-            Err(RollbackTransaction)
-        });
+        let users = Repository::find_users(&conn);
+        assert!(users.is_ok());
+        assert_eq!(users.unwrap(), expected_users);
+        Err(RollbackTransaction)
     }
 
     #[test]

@@ -3,19 +3,10 @@ use chrono::{NaiveDateTime, Utc};
 
 use serde::{Deserialize, Serialize};
 use std::default::Default;
-use validator::Validate;
 
 #[derive(Queryable, Debug, Clone, PartialEq)]
 pub struct User {
-    pub id: u64,
-    pub name: String,
-    pub created_at: NaiveDateTime,
-    pub updated_at: Option<NaiveDateTime>,
-}
-
-#[derive(Insertable, Debug, Clone, PartialEq)]
-#[table_name = "users"]
-pub struct NewUser {
+    pub id: Option<u64>,
     pub name: String,
     pub created_at: NaiveDateTime,
     pub updated_at: Option<NaiveDateTime>,
@@ -58,7 +49,7 @@ pub struct UserResponse {
 impl UserResponse {
     pub fn from_user(user: &User) -> Self {
         UserResponse {
-            id: user.id,
+            id: user.id.unwrap(),
             nickname: user.name.clone(),
             created_at: user.created_at,
             updated_at: user.updated_at.unwrap(),
