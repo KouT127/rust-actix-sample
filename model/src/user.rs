@@ -4,33 +4,12 @@ use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::default::Default;
 
-#[derive(Queryable, Debug, Clone, PartialEq)]
+#[derive(Queryable, Debug, Clone, PartialEq, Deserialize)]
 pub struct User {
     pub id: Option<u64>,
     pub name: String,
     pub created_at: NaiveDateTime,
     pub updated_at: Option<NaiveDateTime>,
-}
-
-impl Default for NewUser {
-    fn default() -> NewUser {
-        NewUser {
-            name: "".to_string(),
-            created_at: Utc::now().naive_utc(),
-            updated_at: Some(Utc::now().naive_utc()),
-        }
-    }
-}
-
-impl NewUser {
-    pub fn to_user(&self, id: u64) -> User {
-        User {
-            id,
-            name: self.name.clone(),
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -57,9 +36,8 @@ impl UserResponse {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Validate)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct UserPayload {
-    #[validate(length(min = 1, max = 20))]
     pub name: String,
 }
 
